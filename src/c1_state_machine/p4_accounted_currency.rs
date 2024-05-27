@@ -9,7 +9,7 @@
 //! Each user is associated with an account balance and users are able to send money to other users.
 
 use super::{StateMachine, User};
-use std::collections::HashMap;
+use std::{borrow::BorrowMut, collections::HashMap};
 
 /// This state machine models a multi-user currency system. It tracks the balance of each
 /// user and allows users to send funds to one another.
@@ -45,7 +45,58 @@ impl StateMachine for AccountedCurrency {
     type Transition = AccountingTransaction;
 
     fn next_state(starting_state: &Balances, t: &AccountingTransaction) -> Balances {
-        todo!("Exercise 1")
+        let mut balances = starting_state.clone();
+        match t {
+            AccountingTransaction::Transfer { sender, receiver, amount } => {
+                if has_enough_balance(sender, &balances, amount) {
+                    let sender_balance = balances.get(sender).unwrap() - amount; 
+                    balances.insert(*sender, sender_balance);
+                    if balances.contains_key(receiver) {
+                        balances.insert(*receiver, balances.get(receiver).unwrap() + amount);
+                    } else {
+                        balances.insert(*receiver, *amount);
+                    }
+                    if sender_balance == 0 {
+                        balances.remove(sender);
+                    }
+                    balances
+                } else {
+                    balances
+                }
+            },
+            AccountingTransaction::Burn { burner, amount } => {
+                if has_enough_balance(burner, &balances, amount) {
+                    let burner_balance = balances.get(burner).unwrap() - amount; 
+                    balances.insert(*burner, burner_balance);
+                    if burner_balance == 0 {
+                        balances.remove(burner);
+                    }
+                    balances
+                } else {
+                    balances.remove(burner);
+                    balances
+                }
+            },
+            AccountingTransaction::Mint { minter, amount } => {
+                if *amount != 0 {
+                    if balances.contains_key(minter) {
+                        balances.insert(*minter, *amount + balances.get(minter).unwrap());
+                    } else {
+                        balances.insert(*minter, *amount);
+                    }
+                }
+                balances
+            },
+            _ => balances
+        }
+    }
+}
+
+pub fn has_enough_balance(user: &User, balances: &Balances, amount: &u64) -> bool {
+    if let Some(&balance) = balances.get(&user) {
+        balance >= *amount
+    } else {
+        false
     }
 }
 
