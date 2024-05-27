@@ -67,7 +67,6 @@ impl Header {
             }
             i += 1;
         }
-        // println!("i: {}", i);
         chain[i].height == len as u64
     }
 }
