@@ -4,7 +4,7 @@
 //! When a state transition spends bills, new bills are created in lesser or equal amount.
 
 use super::{StateMachine, User};
-use std::collections::HashSet;
+use std::{collections::HashSet, sync::mpsc::Receiver};
 
 /// This state machine models a multi-user currency system. It tracks a set of bills in
 /// circulation, and updates that set when money is transferred.
@@ -94,8 +94,50 @@ impl StateMachine for DigitalCashSystem {
     type Transition = CashTransaction;
 
     fn next_state(starting_state: &Self::State, t: &Self::Transition) -> Self::State {
-        todo!("Exercise 1")
+        let mut starting_state = starting_state.clone();
+        match t {
+            CashTransaction::Mint { minter, amount } => {
+                starting_state.add_bill(Bill {
+                    owner: *minter,
+                    amount: *amount,
+                    serial: starting_state.next_serial,
+                });
+                starting_state
+            },
+            CashTransaction::Transfer { spends, receives } => {
+                // empty spends and receives not allowed
+                if spends.clone().len() == 0 || receives.clone().len() == 0 {
+                    return starting_state;
+                }
+
+                let spends_sum = sum_amount(spends.clone());
+                let receives_sum = sum_amount(receives.clone());
+
+                // sum the spends and receives while checking for overflow
+                if spends_sum == Err("Overflow occurred") || receives_sum == Err("Overflow occured") {
+                    return starting_state;
+                }
+
+                // output 0 receive not allowed
+                if receives_sum.unwrap() == 0 {
+                    return starting_state;
+                }
+                
+                // The total amount received must be less than or equal to the amount spent
+                if receives_sum.unwrap() > spends_sum.unwrap() {
+                    return starting_state;
+                }
+
+                todo!()
+            }
+        }
     }
+}
+
+pub fn sum_amount(bills: Vec<Bill>) -> Result<u64, &'static str> {
+    bills.iter().try_fold(0u64, |acc, bill| {
+        acc.checked_add(bill.amount).ok_or("Overflow occurred")
+    })
 }
 
 #[test]
