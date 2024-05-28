@@ -106,15 +106,21 @@ impl StateMachine for DigitalCashSystem {
             },
             CashTransaction::Transfer { spends, receives } => {
                 // empty spends and receives not allowed
-                if spends.clone().len() == 0 || receives.clone().len() == 0 {
+                if spends.clone().len() == 0 {
                     return starting_state;
+                }
+
+                if receives.clone().len() == 0 {
+                    let mut state = State::new();
+                    state.set_serial(1);
+                    return state;
                 }
 
                 let spends_sum = sum_amount(spends.clone());
                 let receives_sum = sum_amount(receives.clone());
 
                 // sum the spends and receives while checking for overflow
-                if spends_sum == Err("Overflow occurred") || receives_sum == Err("Overflow occured") {
+                if spends_sum == Err("Overflow occurred") || receives_sum == Err("Overflow occurred") {
                     return starting_state;
                 }
 
@@ -128,7 +134,38 @@ impl StateMachine for DigitalCashSystem {
                     return starting_state;
                 }
 
-                todo!()
+                // cant spend and receive the same bill
+                let has_same_bill = check_same_bill(spends.clone(), receives.clone());
+                if has_same_bill {
+                    return starting_state;
+                }
+
+                let has_overflow = check_overflow(spends.clone(), receives.clone());
+                if has_overflow {
+                    return starting_state;
+                }
+
+                // spends should match the current sate
+                let has_same_state = check_state_matches_with_spends(spends.clone(), starting_state.bills.clone());
+                if !has_same_state {
+                    return starting_state;
+                }
+
+                // spends has two same bills
+                let has_two_same_bills = check_spends_has_two_same_bills(spends.clone());
+                if has_two_same_bills {
+                    return starting_state;
+                }
+
+                for bill in spends {
+                    starting_state.bills.remove(bill);
+                }
+
+                for bill in receives {
+                    starting_state.add_bill(bill.clone());
+                }
+
+                starting_state
             }
         }
     }
@@ -138,6 +175,41 @@ pub fn sum_amount(bills: Vec<Bill>) -> Result<u64, &'static str> {
     bills.iter().try_fold(0u64, |acc, bill| {
         acc.checked_add(bill.amount).ok_or("Overflow occurred")
     })
+}
+
+pub fn check_same_bill(spends: Vec<Bill>, receives: Vec<Bill>) -> bool {
+    // Use a HashSet to store the serial numbers of the bills in the spends vector
+    let spend_serials: HashSet<u64> = spends.iter().map(|bill| bill.serial).collect();
+    
+    // Check if any of the bills in the receives vector have the same serial number
+    receives.iter().any(|bill| spend_serials.contains(&bill.serial))
+}
+
+pub fn check_overflow(spends: Vec<Bill>, receives: Vec<Bill>) -> bool {
+    let spend_serials: HashSet<u64> = spends.iter().map(|bill| bill.serial).collect();
+    let receive_serials: HashSet<u64> = receives.iter().map(|bill| bill.serial).collect();
+
+    // check for overflow
+    receives.iter().any(|bill| receive_serials.contains(&u64::MAX)) ||
+    spends.iter().any(|bill| spend_serials.contains(&u64::MAX))
+}
+
+pub fn check_state_matches_with_spends(spends: Vec<Bill>, state_bills: HashSet<Bill>) -> bool {
+    let spend_set: HashSet<Bill> = spends.into_iter().collect();
+    spend_set.is_subset(&state_bills)
+}
+
+pub fn check_spends_has_two_same_bills(spends: Vec<Bill>) -> bool {
+    let mut seen_bills = HashSet::new();
+    
+    for bill in spends {
+        if !seen_bills.insert(bill) {
+            // If the bill was already in the set, insert returns false
+            return true;
+        }
+    }
+    
+    false
 }
 
 #[test]
