@@ -37,12 +37,31 @@ pub struct Header {
 impl Header {
     /// Returns a new valid genesis header.
     fn genesis() -> Self {
-        todo!("Exercise 1")
+        Header {
+            parent: 0,
+            height: 0,
+            extrinsic: 0,
+            state: 0,
+            consensus_digest: 0,
+        }
     }
 
     /// Create and return a valid child header.
     fn child(&self, extrinsic: u64) -> Self {
-        todo!("Exercise 2")
+        let mut nonce = 0;
+        let mut child = Header {
+            parent: hash(&self),
+            height: self.height + 1,
+            extrinsic,
+            state: self.state + extrinsic,
+            consensus_digest: nonce,
+        };
+
+        while hash(&child) > THRESHOLD {
+            nonce += 1;
+            child.consensus_digest = nonce;
+        };
+        child
     }
 
     /// Verify that all the given headers form a valid chain from this header to the tip.
@@ -50,7 +69,33 @@ impl Header {
     /// In addition to all the rules we had before, we now need to check that the block hash
     /// is below a specific threshold.
     fn verify_sub_chain(&self, chain: &[Header]) -> bool {
-        todo!("Exercise 3")
+        let len = chain.len();
+        if len == 0 {
+            return true;
+        }
+        if hash(&self) != chain[0].parent {
+            return false;
+        }
+
+        let mut i = 0;
+        while i < len - 1 {
+            let parent_block = &chain[i];
+            let child_block = &chain[i + 1];
+            if hash(parent_block) != child_block.parent {
+                return false;
+            }
+            i += 1;
+        }
+
+        let state_valid: bool;
+        let consensus_valid = hash(&chain[i]) < THRESHOLD;
+        if len == 1 {
+            state_valid = chain[i].state == self.state + chain[i].extrinsic;
+        } else {
+            state_valid = chain[i].state == chain[i-1].state + chain[i].extrinsic;
+        }
+
+        state_valid && consensus_valid && chain[i].height == len as u64
     }
 
     // After the blockchain ran for a while, a political rift formed in the community.
