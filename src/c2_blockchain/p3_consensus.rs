@@ -32,6 +32,7 @@ pub struct Header {
     consensus_digest: u64,
 }
 
+
 // Here are the methods for creating new header and verifying headers.
 // It is your job to write them.
 impl Header {
@@ -107,13 +108,75 @@ impl Header {
     /// verify that the given headers form a valid chain.
     /// In this case "valid" means that the STATE MUST BE EVEN.
     fn verify_sub_chain_even(&self, chain: &[Header]) -> bool {
-        todo!("Exercise 4")
+        let len = chain.len();
+        if len == 0 {
+            return true;
+        }
+        if hash(&self) != chain[0].parent {
+            return false;
+        }
+
+        let mut i = 0;
+        while i < len - 1 {
+            let parent_block = &chain[i];
+            let child_block = &chain[i + 1];
+            println!("parent state: {}, child_state: {}", parent_block.state, child_block.state);
+            if hash(parent_block) != child_block.parent {
+                return false;
+            }
+            if i as u64 >= FORK_HEIGHT &&
+            (parent_block.state % 2 != 0 || child_block.state % 2 != 0) {
+                return false;
+            }
+
+            i += 1;
+        }
+
+        let state_valid: bool;
+        let consensus_valid = hash(&chain[i]) < THRESHOLD;
+        if len == 1 {
+            state_valid = chain[i].state == self.state + chain[i].extrinsic;
+        } else {
+            state_valid = chain[i].state == chain[i-1].state + chain[i].extrinsic;
+        }
+
+        state_valid && consensus_valid && chain[i].state % 2 == 0 && chain[i].height == len as u64
     }
 
     /// verify that the given headers form a valid chain.
     /// In this case "valid" means that the STATE MUST BE ODD.
     fn verify_sub_chain_odd(&self, chain: &[Header]) -> bool {
-        todo!("Exercise 5")
+        let len = chain.len();
+        if len == 0 {
+            return true;
+        }
+        if hash(&self) != chain[0].parent || self.state % 2 != 0 {
+            return false;
+        }
+
+        let mut i = 0;
+        while i < len - 1 {
+            let parent_block = &chain[i];
+            let child_block = &chain[i + 1];
+            if hash(parent_block) != child_block.parent {
+                return false;
+            }
+            if i as u64 >= FORK_HEIGHT &&
+            (parent_block.state % 2 == 0 || child_block.state % 2 == 0) {
+                return false;
+            }
+            i += 1;
+        }
+
+        let state_valid: bool;
+        let consensus_valid = hash(&chain[i]) < THRESHOLD;
+        if len == 1 {
+            state_valid = chain[i].state == self.state + chain[i].extrinsic;
+        } else {
+            state_valid = chain[i].state == chain[i-1].state + chain[i].extrinsic;
+        }
+
+        state_valid && chain[i].state % 2 != 0 && consensus_valid && chain[i].height == len as u64
     }
 }
 
@@ -134,7 +197,32 @@ impl Header {
 /// G -- 1 -- 2
 ///            \-- 3'-- 4'
 fn build_contentious_forked_chain() -> (Vec<Header>, Vec<Header>, Vec<Header>) {
-    todo!("Exercise 6")
+    let mut common_prefix: Vec<Header> = Vec::new();
+    let mut even_suffix: Vec<Header> = Vec::new();
+    let mut odd_suffix: Vec<Header> = Vec::new();
+
+    let g = Header::genesis(); // 0
+    let b1 = g.child(2); // 2
+    let b2 = b1.child(1); // 3
+
+    let b3 = b2.child(3); // 6
+    let b4 = b3.child(2); // 8
+
+
+    let b5 = b2.child(2); // 5
+    let b6 = b5.child(2); // 7
+
+    common_prefix.push(g.clone());
+    common_prefix.push(b1.clone());
+    common_prefix.push(b2.clone());
+
+    even_suffix.push(b3.clone());
+    even_suffix.push(b4.clone());
+
+    odd_suffix.push(b5.clone());
+    odd_suffix.push(b6.clone());
+
+    (common_prefix, even_suffix, odd_suffix)
 }
 
 // To run these tests: `cargo test bc_3`
