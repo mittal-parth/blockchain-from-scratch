@@ -4,6 +4,8 @@
 use crate::hash;
 type Hash = u64;
 
+const THRESHOLD: u64 = u64::max_value() / 100;
+
 /// The header no longer contains an extrinsic directly. Rather a vector of extrinsics will be stored in
 /// the block body. We are still storing the state in the header for now. This will change in an upcoming
 /// lesson as well.
@@ -28,14 +30,33 @@ pub struct Header {
 impl Header {
     /// Returns a new valid genesis header.
     pub fn genesis() -> Self {
-        todo!("Exercise 1")
+        Header {
+            parent: 0,
+            height: 0,
+            extrinsics_root: hash(&Vec::<u64>::new()),
+            state: 0,
+            consensus_digest: 0,
+        }
     }
 
     /// Create and return a valid child header.
     /// Without the extrinsics themselves, we cannot calculate the final state
     /// so that information is passed in.
     pub fn child(&self, extrinsics_root: Hash, state: u64) -> Self {
-        todo!("Exercise 2")
+        let mut nonce = 0;
+        let mut child = Header {
+            parent: hash(&self),
+            height: self.height + 1,
+            extrinsics_root,
+            state,
+            consensus_digest: nonce,
+        };
+
+        while hash(&child) > THRESHOLD {
+            nonce += 1;
+            child.consensus_digest = nonce;
+        };
+        child
     }
 
     /// Verify a single child header.
@@ -46,7 +67,19 @@ impl Header {
     /// subtask of checking an entire block. So it doesn't make sense to check
     /// the entire header chain at once if the chain may be invalid at the second block.
     fn verify_child(&self, child: &Header) -> bool {
-        todo!("Exercise 3")
+        if hash(&self) != child.parent {
+            return false;
+        }
+
+        if child.height != self.height + 1 {
+            return false;
+        }
+
+        if hash(child) > THRESHOLD {
+            return false;
+        }
+
+        true
     }
 
     /// Verify that all the given headers form a valid chain from this header to the tip.
@@ -57,7 +90,27 @@ impl Header {
     ///  * with head recursion
     ///  * with tail recursion
     fn verify_sub_chain(&self, chain: &[Header]) -> bool {
-        todo!("Exercise 4")
+        let len = chain.len();
+        if len == 0 {
+            return true;
+        }
+        if hash(&self) != chain[0].parent {
+            return false;
+        }
+
+        let mut i = 0;
+        while i < len - 1 {
+            let parent_block = &chain[i];
+            let child_block = &chain[i + 1];
+            if hash(parent_block) != child_block.parent {
+                return false;
+            }
+            i += 1;
+        }
+
+        let consensus_valid = hash(&chain[i]) < THRESHOLD;
+
+        consensus_valid && chain[i].height == len as u64
     }
 }
 
@@ -76,20 +129,34 @@ pub struct Block {
 impl Block {
     /// Returns a new valid genesis block. By convention this block has no extrinsics.
     pub fn genesis() -> Self {
-        todo!("Exercise 5")
+        Block {
+            header: Header::genesis(),
+            body: Vec::<u64>::new(),
+        }
     }
 
     /// Create and return a valid child block.
     /// The extrinsics are batched now, so we need to execute each of them.
     pub fn child(&self, extrinsics: Vec<u64>) -> Self {
-        todo!("Exercise 6")
+        let extrinsics_sum: u64 = extrinsics.iter().sum();
+        Block {
+            header: self.header.child(hash(&extrinsics), extrinsics_sum + self.header.state),
+            body: extrinsics,
+        }
     }
 
     /// Verify that all the given blocks form a valid chain from this block to the tip.
     ///
     /// We need to verify the headers as well as execute all transactions and check the final state.
     pub fn verify_sub_chain(&self, chain: &[Block]) -> bool {
-        todo!("Exercise 7")
+        let header_chain: Vec<Header> = chain.iter().map(|block| block.clone().header).collect();
+        // convert it to a slice
+        let header_chain: &[Header] = &header_chain;
+
+        let is_correct_header = self.header.verify_sub_chain(header_chain);
+
+        let total_sum: u64 = chain.iter().flat_map(|block| block.body.iter()).sum();
+        is_correct_header && total_sum == chain[chain.len() - 1].header.state
     }
 }
 
@@ -102,7 +169,14 @@ impl Block {
 ///
 /// Notice that you do not need the entire parent block to do this. You only need the header.
 fn build_invalid_child_block_with_valid_header(parent: &Header) -> Block {
-    todo!("Exercise 8")
+    let extrinsics: Vec<u64> = vec![1,2,3];
+    let extrinsics_sum:u64 = extrinsics.clone().iter().sum();
+    let child_header = parent.child(hash(&extrinsics), parent.state + extrinsics_sum);
+
+    Block {
+        header: child_header,
+        body: vec![1,2,3,4]
+    }
 }
 
 #[test]
